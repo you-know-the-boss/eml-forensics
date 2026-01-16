@@ -1,0 +1,140 @@
+<!DOCTYPE html> 
+<html lang="en"> 
+<head> 
+    <meta charset="UTF-8"> 
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+    <title>EML Forensics & Structure Analyzer</title> 
+    <script src="https://cdn.tailwindcss.com"></script> 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> 
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"> 
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script> 
+ 
+    <style> 
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #ffe4e1; 
+            background-image: radial-gradient(#ffffff 15%, transparent 16%), radial-gradient(#ffffff 15%, transparent 16%); 
+            background-size: 60px 60px;
+            background-position: 0 0, 30px 30px;
+            color: #1c1917; 
+        } 
+        /* UI Utilities */
+        .chart-container { position: relative; width: 100%; max-width: 600px; margin: 0 auto; height: 300px; } 
+        @media (min-width: 768px) { .chart-container { height: 350px; } } 
+        .code-scroll::-webkit-scrollbar { width: 8px; } 
+        .code-scroll::-webkit-scrollbar-track { background: #e7e5e4; } 
+        .code-scroll::-webkit-scrollbar-thumb { background: #a8a29e; border-radius: 4px; } 
+        .typing-indicator span { display: inline-block; width: 6px; height: 6px; background-color: #4f46e5; border-radius: 50%; animation: typing 1.4s infinite ease-in-out both; margin: 0 2px; } 
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; } 
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; } 
+        @keyframes typing { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } } 
+        .prose p { margin-bottom: 0.75em; } 
+        .prose ul { list-style-type: disc; margin-left: 1.5em; margin-bottom: 0.75em; } 
+        .prose strong { font-weight: 600; color: #4338ca; } 
+    </style> 
+</head> 
+<body class="min-h-screen flex flex-col"> 
+ 
+    <nav class="bg-white shadow-sm border-b border-stone-200 sticky top-0 z-50"> 
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"> 
+            <div class="flex justify-between h-16"> 
+                <div class="flex"> 
+                    <div class="flex-shrink-0 flex items-center"> 
+                        <span class="text-xl font-bold text-stone-800 tracking-tight">EML<span class="text-indigo-600">Analyst</span></span> 
+                    </div> 
+                    <div class="hidden sm:ml-8 sm:flex sm:space-x-8"> 
+                        <button onclick="scrollToSection('dashboard')" class="text-stone-500 hover:text-stone-900 px-3 py-2 text-sm font-medium">Dashboard</button> 
+                        <button onclick="scrollToSection('anatomy')" class="text-stone-500 hover:text-stone-900 px-3 py-2 text-sm font-medium">Anatomy</button> 
+                        <button onclick="scrollToSection('ai-assistant')" class="text-indigo-600 font-semibold px-3 py-2 text-sm">AI Assistant ✨</button> 
+                    </div> 
+                </div> 
+            </div> 
+        </div> 
+    </nav> 
+ 
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12"> 
+        
+        <header class="text-center sm:text-left border-b border-stone-200 pb-8"> 
+            <h1 class="text-3xl sm:text-4xl font-extrabold text-stone-900">EML File Forensics</h1> 
+            <p class="mt-3 text-lg text-stone-600">Interactive analysis of Electronic Mail structure and threats.</p> 
+        </header> 
+ 
+        <section id="ai-assistant" class="space-y-6"> 
+            <div class="bg-indigo-900 rounded-xl shadow-lg border border-indigo-800 overflow-hidden text-white"> 
+                <div class="p-6 border-b border-indigo-800 bg-indigo-950/50"> 
+                    <h2 class="text-2xl font-bold text-white">AI Forensic Assistant ✨</h2> 
+                    <p class="text-indigo-200 text-sm mt-1">Powered by Netlify Functions & Gemini</p> 
+                </div> 
+                 
+                <div class="p-6 space-y-4"> 
+                    <h3 class="font-semibold text-lg">Forensic Header Scanner</h3> 
+                    <textarea id="headerInput" class="w-full h-32 bg-indigo-950 border border-indigo-700 rounded-md p-3 text-xs font-mono text-indigo-100 outline-none placeholder-indigo-700" placeholder="Paste headers here..."></textarea> 
+                    <button onclick="analyzeHeaders()" id="analyzeBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-2 rounded-md font-medium transition-colors flex justify-center items-center gap-2"> 
+                        <span>Scan Headers</span> 
+                    </button> 
+                    <div id="scanResult" class="hidden bg-indigo-950/50 p-4 rounded border border-indigo-800 text-sm text-indigo-100 prose prose-invert max-h-60 overflow-y-auto"></div> 
+                </div> 
+            </div> 
+        </section> 
+ 
+        <section id="dashboard" class="py-4"><div class="p-4 bg-white rounded shadow text-center text-stone-500">Dashboard & Anatomy Visuals (Simplified for this file)</div></section> 
+ 
+    </main> 
+ 
+    <script> 
+        // --- NETLIFY API CONFIG --- 
+        const API_URL = "/.netlify/functions/gemini"; // Standard Netlify Function Path 
+ 
+        async function callGemini(prompt, outputElementId, loadingBtnId, originalBtnText) { 
+            const resultDiv = document.getElementById(outputElementId); 
+            const btn = document.getElementById(loadingBtnId);  
+            const btnSpan = btn.querySelector('span'); 
+             
+            // Loading State 
+            resultDiv.classList.remove('hidden');  
+            resultDiv.innerHTML = '<div class="typing-indicator"><span></span><span></span><span></span></div>';  
+            btn.disabled = true;  
+            btnSpan.textContent = "Analyzing...";  
+ 
+            try {  
+                const response = await fetch(API_URL, {  
+                    method: 'POST',  
+                    headers: { 'Content-Type': 'application/json' },  
+                    body: JSON.stringify({ prompt: prompt })  
+                });  
+ 
+                const textResponse = await response.text();
+                let data;
+                try {
+                    data = JSON.parse(textResponse);
+                } catch(e) {
+                    throw new Error(`Server Error: ${textResponse.substring(0, 50)}...`);
+                }
+
+                if (!response.ok) { 
+                    throw new Error(data.error || `HTTP ${response.status}`);  
+                } 
+ 
+                // Success 
+                resultDiv.innerHTML = marked.parse(data.result);  
+ 
+            } catch (error) {  
+                console.error("API Error:", error);  
+                resultDiv.innerHTML = `<span class="text-red-400 font-mono text-xs">Error: ${error.message}</span>`;  
+            } finally {  
+                btn.disabled = false;  
+                btnSpan.textContent = originalBtnText;  
+            }  
+        } 
+ 
+        function analyzeHeaders() { 
+            const headers = document.getElementById('headerInput').value; 
+            if (!headers.trim()) { alert("Please paste headers first."); return; } 
+            const prompt = `Analyze these email headers for forensic threats (spoofing, loops): ${headers}`; 
+            callGemini(prompt, 'scanResult', 'analyzeBtn', 'Scan Headers'); 
+        } 
+ 
+        function scrollToSection(id) { document.getElementById(id).scrollIntoView({ behavior: 'smooth' }); } 
+    </script> 
+</body> 
+</html>
